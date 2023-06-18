@@ -60,14 +60,10 @@ module Label = struct
     fun i -> b.(i)
 
   and v_weak states labels ~t ~p ~op f f' =
-    let labels =
-      Int_map.merge merge_labels (v states labels f) (v states labels f')
-    in
-    ignore t;
-    ignore p;
-    ignore op;
-    ignore labels;
-    fun _ -> false
+    let p = 1.0 -. p in
+    let op = match op with Formula.Geq -> Formula.Gt | Gt -> Geq in
+    fun i ->
+      not (v_until states labels ~t ~p ~op (Neg f') (And (Neg f, Neg f')) i)
 
   (** Bottom-to-top traversal of the formula tree [f],
       repeatedly adding subformulae to [labels] for all states *)

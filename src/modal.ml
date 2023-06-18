@@ -2,7 +2,7 @@ let matrix n states inconclusive_states =
   let f i j =
     if Int_map.mem i inconclusive_states then
       let s = Int_map.find i states in
-      Int_map.find j s.Model.State.t
+      Int_map.find_opt j s.Model.State.t |> Option.value ~default:0.0
     else if i = j then 1.0
     else 0.0
   in
