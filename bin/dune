@@ -1,0 +1,5 @@
+(executable
+ (public_name pctl)
+ (name main)
+ (preprocess
+  (pps ppx_jane)))
