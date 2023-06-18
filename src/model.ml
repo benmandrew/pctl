@@ -11,11 +11,9 @@ module Aprop = struct
   type t = m [@@deriving compare]
 end
 
-module Int_map = Map.Make (Int)
-
 (** States in a temporal model *)
 module State = struct
-  type t = { t : (int * float) list; l : Aprop.Set.t }
+  type t = { t : float Int_map.t; l : Aprop.Set.t }
   (** [id] is the state's unique identifier.
       [t] is list of transitions out of this state,
         where for a given [(s', p)] s' is the

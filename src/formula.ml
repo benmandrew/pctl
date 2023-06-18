@@ -1,5 +1,3 @@
-module Int_map = Map.Make (Int)
-
 (** PCTL state and path formulae *)
 
 type comparison = Geq | Gt [@@deriving compare]

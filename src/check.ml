@@ -1,5 +1,3 @@
-module Int_map = Map.Make (Int)
-
 let label_init states =
   let init_props s =
     Model.Aprop.Set.fold
