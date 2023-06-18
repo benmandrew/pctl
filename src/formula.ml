@@ -1,23 +1,23 @@
-(** PCTL state and path formulae *)
+open Ppx_compare_lib.Builtin
 
+(** Comparison operators for PCTL path operators *)
 type comparison = Geq | Gt [@@deriving compare]
 
-(* To satisfy the [compare] PPX below *)
-let compare_float = Float.compare
+let compare_probability c p p' =
+  match c with Geq -> Float.compare p p' >= 0 | Gt -> Float.compare p p' > 0
 
-(** State formulae *)
+(** PCTL state formulae *)
 type s =
   | Prop of Model.Aprop.t
   | Neg of s
   | Or of s * s
   | And of s * s
   | Impl of s * s
-  | Pgeq of float * p
+  | P of comparison * float * p
 [@@deriving compare]
 
-(** Path formulae *)
-and p = U of comparison * float * s * s | W of comparison * float * s * s
-[@@deriving compare]
+(** PCTL path formulae *)
+and p = U of int * s * s | W of int * s * s [@@deriving compare]
 
 type t = s [@@deriving compare]
 (** Top-level PCTL formulae must be state formulae *)

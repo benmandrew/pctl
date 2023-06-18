@@ -24,5 +24,25 @@ module State = struct
 
   let prop_holds t ap = Aprop.Set.mem ap t.l
 
-  type map = t Int_map.t
+  let v_list t l =
+    let t = Int_map.of_seq @@ List.to_seq t in
+    let l = Aprop.Set.of_list l in
+    { t; l }
+end
+
+module Kripke = struct
+  type t = { states : State.t Int_map.t; initial : int }
+
+  let v initial states =
+    assert (Int_map.exists (fun id _ -> id = initial) states);
+    { initial; states }
+
+  let v_list initial states =
+    let states = Int_map.of_seq @@ List.to_seq states in
+    v initial states
+
+  let prop_holds_in_state k s ap =
+    match Int_map.find_opt s k.states with
+    | Some s -> State.prop_holds s ap
+    | None -> false
 end
