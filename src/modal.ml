@@ -13,7 +13,13 @@ let state_inconclusive labels i f f' =
   && not (Formula.f_in_state_labels labels i f')
 
 let matrix_mul =
-  Array.(map2 (fun row e -> fold_left (fun e' acc -> (e *. e') +. acc) e row))
+  Array.(map2 (fun row e -> fold_left (fun e' acc -> (e *. e') +. acc) 0.0 row))
+
+let print_vector r =
+  Array.iter (Printf.printf "%4.2f ") r;
+  Printf.printf "\n"
+
+let print_matrix = Array.iter print_vector
 
 let mu_measure_until (states : Model.State.t Int_map.t) labels t f f' =
   let inconclusive_states, _ =
@@ -30,4 +36,4 @@ let mu_measure_until (states : Model.State.t Int_map.t) labels t f f' =
 
 let until states labels ~t ~p ~op f f' =
   let probabilities = mu_measure_until states labels t f f' in
-  Array.map (fun p' -> Formula.compare_probability op p p') probabilities
+  Array.map (fun p' -> Formula.compare_probability op p' p) probabilities

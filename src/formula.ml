@@ -8,6 +8,7 @@ let compare_probability c p p' =
 
 (** PCTL state formulae *)
 type s =
+  | B of bool
   | Prop of Model.Aprop.t
   | Neg of s
   | Or of s * s

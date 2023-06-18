@@ -72,25 +72,23 @@ module Label = struct
   (** Bottom-to-top traversal of the formula tree [f],
       repeatedly adding subformulae to [labels] for all states *)
   and v states labels f =
-    match f with
-    | Formula.Prop _ -> labels
-    | _ ->
-        let pred labels =
-          match f with
-          | Formula.Prop _ -> fun _ -> false
-          | Neg f -> v_neg states labels f
-          | Or (f, f') -> v_or states labels f f'
-          | And (f, f') -> v_and states labels f f'
-          | Impl (f, f') -> v_impl states labels f f'
-          | P (op, p, path_f) -> (
-              match path_f with
-              | U (t, f, f') -> v_until states labels ~t ~p ~op f f'
-              | W (t, f, f') -> v_weak states labels ~t ~p ~op f f')
-        in
-        Int_map.fold
-          (fun i _ labels ->
-            if pred labels i then add_f_to_state labels i f else labels)
-          states labels
+    let pred labels =
+      match f with
+      | B b -> fun _ -> b
+      | Formula.Prop _ -> fun _ -> false
+      | Neg f -> v_neg states labels f
+      | Or (f, f') -> v_or states labels f f'
+      | And (f, f') -> v_and states labels f f'
+      | Impl (f, f') -> v_impl states labels f f'
+      | P (op, p, path_f) -> (
+          match path_f with
+          | U (t, f, f') -> v_until states labels ~t ~p ~op f f'
+          | W (t, f, f') -> v_weak states labels ~t ~p ~op f f')
+    in
+    Int_map.fold
+      (fun i _ labels ->
+        if pred labels i then add_f_to_state labels i f else labels)
+      states labels
 end
 
 let v k f =
