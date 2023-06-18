@@ -1,66 +1,4 @@
-(** Atomic propositions *)
-module Aprop = struct
-  type t = Green | Red | Amber [@@deriving compare]
-end
-
-module Aprop_set = Set.Make (Aprop)
-module Int_map = Map.Make (Int)
-
-(** States in a temporal model *)
-module State = struct
-  type t = { t : (int * float) list; l : Aprop_set.t }
-  (** [id] is the state's unique identifier.
-      [t] is list of transitions out of this state,
-        where for a given [(s', p)] s' is the
-        destination state and p is the probability
-        of taking that transition. The transition
-        probabilities for a state must sum to 1.
-      [l] is the set of labels that hold in the state. *)
-
-  let prop_holds t ap =
-    Aprop_set.find_opt ap t.l |> function Some _ -> true | None -> false
-
-  type map = t Int_map.t
-end
-
-(** PCTL state and path formulae *)
-module Pctl = struct
-  type comparison = Leq [@@deriving compare]
-
-  (* To satisfy the [compare] PPX below *)
-  let compare_float = Float.compare
-
-  type s =
-    | Prop of Aprop.t
-    | Neg of s
-    | Or of s * s
-    | And of s * s
-    | Impl of s * s
-    | Pgeq of float * p
-  [@@deriving compare]
-
-  and p = U of comparison * float * s * s | W of comparison * float * s * s
-  [@@deriving compare]
-
-  (* Top-level PCTL formulae must be state formulae *)
-  type t = s [@@deriving compare]
-end
-
-module Pctl_set = Set.Make (Pctl)
-
-(* module Kripke = struct
-     type t = { states : State.map; initial : int }
-
-     let v initial (states : State.map) =
-       assert (Int_map.exists (fun id _ -> id = initial) states);
-       (* assert (List.exists (fun s -> s.State.id = initial) states); *)
-       { initial; states }
-
-     let prop_holds_in_state k s ap =
-       match Int_map.find_opt s k.states with
-       | Some s -> State.prop_holds s ap
-       | None -> false
-   end *)
+open Pctl
 
 let label_init states =
   let init_props s =
@@ -73,3 +11,35 @@ let label_init states =
     Int_map.add i l labels
   in
   Int_map.fold add_state states Int_map.empty
+
+let f_in_state_labels labels i f = Int_map.find i labels |> Pctl_set.mem f
+
+(* Add formula [f] to the set of labels for the state with index [i] *)
+let add_f_to_state labels i f =
+  let s = Pctl_set.add f (Int_map.find i labels) in
+  Int_map.add i s labels
+
+(** Bottom-to-top traversal of the formula tree [f],
+    repeatedly adding subformulae to [labels] *)
+let rec label states labels f =
+  match f with
+  | Pctl.Prop _ -> labels
+  | _ ->
+      let labels = label states labels f in
+      let pred labels i =
+        match f with
+        | Pctl.Prop _ -> false
+        | Neg f -> not (f_in_state_labels labels i f)
+        | Or (f, f') ->
+            f_in_state_labels labels i f || f_in_state_labels labels i f'
+        | And (f, f') ->
+            f_in_state_labels labels i f && f_in_state_labels labels i f'
+        | Impl (f, f') ->
+            (not (f_in_state_labels labels i f))
+            || f_in_state_labels labels i f'
+        | Pgeq (_, _) -> false
+      in
+      Int_map.fold
+        (fun i _ labels ->
+          if pred labels i then add_f_to_state labels i f else labels)
+        states labels

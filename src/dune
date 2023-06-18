@@ -1,2 +1,4 @@
 (library
- (name pctl))
+ (name pctl)
+ (preprocess
+  (pps ppx_jane)))
