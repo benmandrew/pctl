@@ -34,6 +34,9 @@ let mu_measure_until (states : Model.State.t Int_map.t) labels t f f' =
   let rec f acc = function 0 -> acc | n -> f (matrix_mul m acc) (n - 1) in
   f v t
 
-let until states labels ~t ~p ~op f f' =
-  let probabilities = mu_measure_until states labels t f f' in
-  Array.map (fun p' -> Formula.compare_probability op p' p) probabilities
+let strong_until states labels ~t ~p ~op f f' =
+  match t with
+  | Formula.Infinity -> raise Exit
+  | N t ->
+      let probabilities = mu_measure_until states labels t f f' in
+      Array.map (fun p' -> Formula.compare_probability op p' p) probabilities
