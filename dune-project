@@ -7,9 +7,9 @@
 (source
  (github benmandrew/pctl))
 
-(authors "Ben Andrew")
+(authors "Joe Whitehead")
 
-(maintainers "Ben Andrew")
+(maintainers "Joe Whitehead")
 
 (license MIT)
 
