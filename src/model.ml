@@ -3,7 +3,19 @@ module type APROP = sig
 
   val compare : t -> t -> int
 
-  module Set : Set.S
+  module Set : (Set.S with type elt = t)
+end
+
+module type MODEL = sig
+  module Aprop : APROP
+
+  module State : sig
+    type t = { t : float Int_map.t; l : Aprop.Set.t }
+  end
+
+  module Kripke : sig
+    type t = { states : State.t Int_map.t; initial : int }
+  end
 end
 
 module Make (Aprop : APROP) = struct
