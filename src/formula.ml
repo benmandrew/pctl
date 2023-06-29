@@ -6,7 +6,21 @@ type comparison = Geq | Gt [@@deriving compare]
 let compare_probability c p p' =
   match c with Geq -> Float.compare p p' >= 0 | Gt -> Float.compare p p' > 0
 
-type inf_nat = N of int | Infinity [@@deriving compare]
+type time = T of int | Infinity [@@deriving compare]
+
+let v_time = function
+  | T t ->
+      assert (t >= 0);
+      T t
+  | t -> t
+
+type prob = One | Pr of float | Zero [@@deriving compare]
+
+let v_prob = function
+  | Pr p ->
+      assert (Float.(compare p 1.0 < 0 && compare p 0.0 > 0));
+      Pr p
+  | p -> p
 
 (** PCTL state formulae *)
 type s =
@@ -16,18 +30,18 @@ type s =
   | Or of s * s
   | And of s * s
   | Impl of s * s
-  | P of comparison * float * p
+  | P of comparison * prob * p
   | A of p
   | E of p
 [@@deriving compare]
 
 (** PCTL path formulae *)
 and p =
-  | Strong_until of inf_nat * s * s
-  | Weak_until of inf_nat * s * s
-  | Generally of inf_nat * s
-  | Finally of inf_nat * s
-  | Leads_to of inf_nat * s * s
+  | Strong_until of time * s * s
+  | Weak_until of time * s * s
+  | Generally of time * s
+  | Finally of time * s
+  | Leads_to of time * s * s
 [@@deriving compare]
 
 type t = s [@@deriving compare]

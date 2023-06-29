@@ -55,8 +55,11 @@ module Label = struct
       (not (Formula.f_in_state_labels labels i f))
       || Formula.f_in_state_labels labels i f'
 
-  and v_forall states labels f = v_path states labels ~p:1.0 ~op:Formula.Geq f
-  and v_exists states labels f = v_path states labels ~p:0.0 ~op:Formula.Gt f
+  and v_forall states labels f =
+    Formula.(v_path states labels ~p:(Pr 1.0) ~op:Geq f)
+
+  and v_exists states labels f =
+    Formula.(v_path states labels ~p:(Pr 0.0) ~op:Gt f)
 
   and v_strong_until states labels ~t ~p ~op f f' =
     let labels =
@@ -67,7 +70,12 @@ module Label = struct
     fun i -> b.(i)
 
   and v_weak_until states labels ~t ~p ~op f f' =
-    let p = 1.0 -. p in
+    let p =
+      match p with
+      | Formula.Pr p -> Formula.Pr (1.0 -. p)
+      | One -> Zero
+      | Zero -> One
+    in
     let op = match op with Formula.Geq -> Formula.Gt | Gt -> Geq in
     fun i ->
       not
@@ -98,8 +106,8 @@ module Label = struct
       | Or (f, f') -> v_or states labels f f'
       | And (f, f') -> v_and states labels f f'
       | Impl (f, f') -> v_impl states labels f f'
-      | A f -> v_path states labels ~p:1.0 ~op:Formula.Geq f
-      | E f -> v_path states labels ~p:0.0 ~op:Formula.Gt f
+      | A f -> Formula.(v_path states labels ~p:(Pr 1.0) ~op:Geq f)
+      | E f -> Formula.(v_path states labels ~p:(Pr 0.0) ~op:Gt f)
       | P (op, p, f) -> v_path states labels ~p ~op f
     in
     Int_map.fold
