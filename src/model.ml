@@ -1,6 +1,7 @@
 module type APROP = sig
   type t
 
+  val pp : Format.formatter -> t -> unit
   val compare : t -> t -> int
 
   module Set : Set.S

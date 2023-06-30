@@ -11,21 +11,23 @@ let matrix n states inconclusive_states =
 let state_inconclusive labels i f f' =
   Formula.(f_in_state_labels labels i f && not (f_in_state_labels labels i f'))
 
+module Int_set = Set.Make (Int)
+
 (** [partition states labels f f'] returns the set of [states] partitioned into three maps [(s_s, s_f, s_i)]. 
     - [s_s] is the set of success states, where for a given state [f'] is in the set of labels
     - [s_f] is the set of failure states, where for a given state neither [f] nor [f'] are in the set of labels
     - [s_i] is the set of inconclusive states, where for a given state [f] is in the set of labels but [f'] is not *)
 let partition_states states labels f f' =
-  let f i s (s_s, s_f, s_i) =
-    if Formula.f_in_state_labels labels i f' then (Int_map.add i s s_s, s_f, s_i)
+  let f i _ (s_s, s_f, s_i) =
+    if Formula.f_in_state_labels labels i f' then (Int_set.add i s_s, s_f, s_i)
     else if
       Formula.(
         (not (f_in_state_labels labels i f))
         && not (f_in_state_labels labels i f))
-    then (s_s, Int_map.add i s s_f, s_i)
-    else (s_s, s_f, Int_map.add i s s_i)
+    then (s_s, Int_set.add i s_f, s_i)
+    else (s_s, s_f, Int_set.add i s_i)
   in
-  Int_map.fold f states Int_map.(empty, empty, empty)
+  Int_map.fold f states Int_set.(empty, empty, empty)
 
 let matrix_mul =
   Array.(map2 (fun row e -> fold_left (fun e' acc -> (e *. e') +. acc) 0.0 row))
@@ -49,104 +51,96 @@ let mu_measure_until (states : Model.State.t Int_map.t) labels t f f' =
   let rec f acc = function 0 -> acc | n -> f (matrix_mul m acc) (n - 1) in
   f v t
 
-module Int_set = Set.Make (Int)
+let add_labels labels fringe f =
+  Int_set.fold
+    (fun i labels ->
+      let s = Formula.Set.add f (Int_map.find i labels) in
+      Int_map.add i s labels)
+    fringe labels
 
-let get_next_fringe unseen next_states_condition =
-  let add_s_conditional i s acc =
+let get_next_fringe states unseen next_states_condition =
+  let add_s_conditional i acc =
     let next_states =
+      let transitions = (Int_map.find i states).Model.State.t in
       let possible_transitions =
-        Int_map.filter (fun _ p -> Float.compare p 0.0 > 0) s.Model.State.t
+        Int_map.filter (fun _ p -> Float.compare p 0.0 > 0) transitions
       in
       Int_map.fold
         (fun i _ prev_states -> Int_set.add i prev_states)
         possible_transitions Int_set.empty
     in
-    if next_states_condition next_states then Int_set.add i acc else acc
+    (* Int_set.iter (Printf.printf "next %d\n") next_states; *)
+    if next_states_condition next_states then
+      (*Printf.printf "add %d\n" i; *)
+      Int_set.add i acc
+    else acc
   in
-  Int_map.fold add_s_conditional unseen Int_set.empty
+  Int_set.fold add_s_conditional unseen Int_set.empty
 
 (** [label_eu states labels ~t f f'] labels states for the case of the until operator {m f U^{\geq t}_{>0} f'} *)
 let label_eu states labels ~t f f' =
+  let f_main = Formula.(P (Gt, Zero, Strong_until (T t, f, f'))) in
   let rec aux labels unseen fringe = function
-    | 0 -> labels
+    | 0 ->
+        (* {m \forall x \in fringe do addlabel(s,f_{main})} *)
+        add_labels labels fringe f_main
     | n ->
-        (* {m \forall x \in fringe do addlabel(s,f)} *)
-        let labels =
-          Int_map.fold
-            (fun i _ labels ->
-              let s = Formula.Set.add f (Int_map.find i labels) in
-              Int_map.add i s labels)
-            fringe labels
-        in
+        (* {m \forall x \in fringe do addlabel(s,f_{main})} *)
+        let labels = add_labels labels fringe f_main in
         (* {m unseen := unseen - fringe} *)
-        let unseen = Int_map.key_difference unseen fringe in
+        let unseen = Int_set.diff unseen fringe in
         (* {m fringe := \{ s : (s \in unseen \wedge \exists s' \in fringe : (T(s,s') > 0)) \}} *)
         let fringe =
-          let next_fringe =
-            get_next_fringe unseen
-              (Int_set.exists (fun i -> Int_map.mem i fringe))
-          in
-          Int_set.fold
-            (fun i m -> Int_map.(add i (find i unseen) m))
-            next_fringe Int_map.empty
+          get_next_fringe states unseen
+            (Int_set.exists (fun i -> Int_set.mem i fringe))
         in
         aux labels unseen fringe (n - 1)
   in
   let fringe, _, unseen = partition_states states labels f f' in
-  let mr = Int.min (Int_map.cardinal unseen) t in
+  let mr = Int.min (Int_set.cardinal unseen) t in
   aux labels unseen fringe mr
 
 let label_au states labels ~t f f' =
+  let f_main = Formula.(P (Geq, One, Strong_until (T t, f, f'))) in
   let rec aux labels unseen fringe seen = function
     | 0 -> labels
     | n ->
-        let labels =
-          Int_map.fold
-            (fun i _ labels ->
-              let s = Formula.Set.add f (Int_map.find i labels) in
-              Int_map.add i s labels)
-            fringe labels
-        in
-        let unseen = Int_map.key_difference unseen fringe in
-        let seen =
-          Int_map.union
-            (fun i _ _ ->
-              failwith
-                (Printf.sprintf "State %d is in both [seen] and [fringe]" i))
-            seen fringe
-        in
+        (* {m \forall x \in fringe do addlabel(s,f_{main})} *)
+        let labels = add_labels labels fringe f_main in
+        (* {m unseen := unseen - fringe} *)
+        let unseen = Int_set.diff unseen fringe in
+        (* {m seen := seen \cup fringe} *)
+        let seen = Int_set.union seen fringe in
+        (* {m fringe := \{ s : (s \in unseen \wedge \forall s' \in seen : (T(s,s') > 0)) \}} *)
         let fringe =
-          let next_fringe =
-            get_next_fringe unseen
-              (Int_set.for_all (fun i -> Int_map.mem i seen))
-          in
-          Int_set.fold
-            (fun i m -> Int_map.(add i (find i unseen) m))
-            next_fringe Int_map.empty
+          get_next_fringe states unseen
+            (Int_set.for_all (fun i -> Int_set.mem i seen))
         in
         aux labels unseen fringe seen (n - 1)
   in
   let fringe, _, unseen = partition_states states labels f f' in
-  let seen = Int_map.empty in
-  let mr = Int.min (Int_map.cardinal unseen) t in
+  let seen = Int_set.empty in
+  let mr = Int.min (Int_set.cardinal unseen) t in
   aux labels unseen fringe seen mr
 
 let strong_until states labels ~t ~p ~op f f' =
   match (t, p, op) with
-  | Formula.T t, Formula.Zero, Formula.Gt ->
-      let n = Int_map.cardinal states in
-      let labels = label_eu states labels ~t f f' in
-      Array.init n (fun i -> Formula.f_in_state_labels labels i f')
+  | Formula.T t, Formula.Zero, Formula.Gt -> label_eu states labels ~t f f'
   | Infinity, Zero, Gt ->
       let n_inconclusive =
         let _, _, unseen = partition_states states labels f f' in
-        Int_map.cardinal unseen
+        Int_set.cardinal unseen
       in
-      let n = Int_map.cardinal states in
-      let labels = label_eu states labels ~t:n_inconclusive f f' in
-      Array.init n (fun i -> Formula.f_in_state_labels labels i f')
+      label_eu states labels ~t:n_inconclusive f f'
   | Infinity, Pr _, Geq -> raise Exit
+  | Formula.T t, Formula.One, Formula.Geq -> label_au states labels ~t f f'
   | T t, Pr p, _ ->
+      let f_main = Formula.(P (op, Pr p, Strong_until (T t, f, f'))) in
       let probabilities = mu_measure_until states labels t f f' in
-      Array.map (fun p' -> Formula.compare_probability op p' p) probabilities
+      Int_map.mapi
+        (fun i s ->
+          let p' = probabilities.(i) in
+          if Formula.compare_probability op p' p then Formula.Set.add f_main s
+          else s)
+        labels
   | _, _, _ -> raise Exit
