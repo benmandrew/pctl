@@ -1,7 +1,6 @@
 open Ppx_compare_lib.Builtin
 
 type comparison = Geq | Gt [@@deriving compare, show]
-
 type prob = One | Pr of float | Zero [@@deriving show]
 
 let compare_prob p p' =

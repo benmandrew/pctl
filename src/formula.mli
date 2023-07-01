@@ -1,12 +1,11 @@
-
 (** Comparison operators for the PCTL [P] operator *)
 type comparison = Geq | Gt
 
 (** Probabilities for the PCTL [P] operator *)
 type prob = One | Pr of float | Zero
 
-(** [compare_prob_with_op op p p'] compares [p] and [p'] according to the formed expression [p op p'] *)
 val compare_prob_with_op : comparison -> float -> float -> bool
+(** [compare_prob_with_op op p p'] compares [p] and [p'] according to the formed expression [p op p'] *)
 
 (** Discrete time-steps for PCTL path operators *)
 type time = T of int | Infinity
@@ -31,15 +30,17 @@ and p =
   | Finally of time * s
   | Leads_to of time * s * s
 
-(** Top-level PCTL formulae must be state formulae *)
 type t = s
+(** Top-level PCTL formulae must be state formulae *)
 
-(** Convert PCTL formulae to (somewhat) canonical form, used for comparisons *)
 val canonicalise : t -> t
+(** Convert PCTL formulae to (somewhat) canonical form, used for comparisons *)
+
 val compare : t -> t -> int
 
 module Set : Set.S with type elt := t
 
-(** [f_in_state_labels s i f] holds if [f] is in the set of labels for state [i] *)
 val f_in_state_labels : Set.t Int_map.t -> int -> t -> bool
+(** [f_in_state_labels s i f] holds if [f] is in the set of labels for state [i] *)
+
 val print_state_labels : Set.t Int_map.t -> unit

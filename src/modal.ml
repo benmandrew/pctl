@@ -71,9 +71,11 @@ let get_next_fringe states unseen next_states_condition =
   in
   Int_set.fold add_s_conditional unseen Int_set.empty
 
+let strong_until_f ~t ~p ~op f f' = Formula.(P (op, p, Strong_until (t, f, f')))
+
 (** [label_eu states labels ~t f f'] labels states for the case of the until operator {m f U^{\geq t}_{>0} f'} *)
 let label_eu states labels ~t f f' =
-  let f_main = Formula.(P (Gt, Zero, Strong_until (T t, f, f'))) in
+  let f_main = strong_until_f ~t:(T t) ~p:Zero ~op:Gt f f' in
   let rec aux labels unseen fringe = function
     | 0 ->
         (* {m \forall x \in fringe do addlabel(s,f_{main})} *)
@@ -96,7 +98,7 @@ let label_eu states labels ~t f f' =
 
 (** [label_eu states labels ~t f f'] labels states for the case of the until operator {m f U^{\geq t}_{\geq 1} f'} *)
 let label_au states labels ~t f f' =
-  let f_main = Formula.(P (Geq, One, Strong_until (T t, f, f'))) in
+  let f_main = strong_until_f ~t:(T t) ~p:One ~op:Geq f f' in
   let rec aux labels unseen fringe seen = function
     | 0 ->
         (* {m \forall x \in fringe do addlabel(s,f_{main})} *)
@@ -129,8 +131,13 @@ let strong_until states labels ~t ~p ~op f f' =
         Int_set.cardinal unseen
       in
       label_eu states labels ~t:n_inconclusive f f'
-  | Infinity, Pr _, Geq -> failwith "General case of infinite-length paths is not handled"
   | Formula.T t, Formula.One, Formula.Geq -> label_au states labels ~t f f'
+  | Infinity, One, Geq ->
+      let n_inconclusive =
+        let _, _, unseen = partition_states states labels f f' in
+        Int_set.cardinal unseen
+      in
+      label_au states labels ~t:n_inconclusive f f'
   | T t, Pr p, _ ->
       let f_main = Formula.(P (op, Pr p, Strong_until (T t, f, f'))) in
       let probabilities = mu_measure_until states labels t f f' in
@@ -140,4 +147,11 @@ let strong_until states labels ~t ~p ~op f f' =
           if Formula.compare_prob_with_op op p' p then Formula.Set.add f_main s
           else s)
         labels
-  | _, _, _ -> raise Exit
+  | _, One, Gt -> labels
+  | t, Zero, Geq ->
+      let state_ids =
+        Int_map.bindings states |> List.map fst |> Int_set.of_list
+      in
+      add_labels labels state_ids (strong_until_f ~t ~p ~op f f')
+  | Infinity, Pr _, _ ->
+      failwith "General case of infinite-length paths is not handled"
