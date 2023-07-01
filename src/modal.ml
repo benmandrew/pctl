@@ -23,14 +23,18 @@ let partition_states states labels f f' =
     else if
       Formula.(
         (not (f_in_state_labels labels i f))
-        && not (f_in_state_labels labels i f))
+        && not (f_in_state_labels labels i f'))
     then (s_s, Int_set.add i s_f, s_i)
     else (s_s, s_f, Int_set.add i s_i)
   in
   Int_map.fold f states Int_set.(empty, empty, empty)
 
-let matrix_mul =
-  Array.(map2 (fun row e -> fold_left (fun e' acc -> (e *. e') +. acc) 0.0 row))
+let matrix_mul m v =
+  let open Array in
+  let product v0 v1 =
+    map2 (fun a b -> a *. b) v0 v1 |> fold_left (fun acc a -> acc +. a) 0.0
+  in
+  mapi (fun i _ -> product v m.(i)) v
 
 let print_vector r =
   Array.iter (Printf.printf "%4.2f ") r;
@@ -69,11 +73,7 @@ let get_next_fringe states unseen next_states_condition =
         (fun i _ prev_states -> Int_set.add i prev_states)
         possible_transitions Int_set.empty
     in
-    (* Int_set.iter (Printf.printf "next %d\n") next_states; *)
-    if next_states_condition next_states then
-      (*Printf.printf "add %d\n" i; *)
-      Int_set.add i acc
-    else acc
+    if next_states_condition next_states then Int_set.add i acc else acc
   in
   Int_set.fold add_s_conditional unseen Int_set.empty
 
@@ -100,10 +100,13 @@ let label_eu states labels ~t f f' =
   let mr = Int.min (Int_set.cardinal unseen) t in
   aux labels unseen fringe mr
 
+(** [label_eu states labels ~t f f'] labels states for the case of the until operator {m f U^{\geq t}_{\geq 1} f'} *)
 let label_au states labels ~t f f' =
   let f_main = Formula.(P (Geq, One, Strong_until (T t, f, f'))) in
   let rec aux labels unseen fringe seen = function
-    | 0 -> labels
+    | 0 ->
+        (* {m \forall x \in fringe do addlabel(s,f_{main})} *)
+        add_labels labels fringe f_main
     | n ->
         (* {m \forall x \in fringe do addlabel(s,f_{main})} *)
         let labels = add_labels labels fringe f_main in
@@ -140,7 +143,7 @@ let strong_until states labels ~t ~p ~op f f' =
       Int_map.mapi
         (fun i s ->
           let p' = probabilities.(i) in
-          if Formula.compare_probability op p' p then Formula.Set.add f_main s
+          if Formula.compare_prob_with_op op p' p then Formula.Set.add f_main s
           else s)
         labels
   | _, _, _ -> raise Exit

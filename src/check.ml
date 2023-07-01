@@ -16,14 +16,8 @@ let add_f_to_state labels i f =
   let s = Formula.Set.add f (Int_map.find i labels) in
   Int_map.add i s labels
 
-let merge_labels _ s s' =
-  match (s, s') with
-  | None, None -> None
-  | s, s' ->
-      let s = Option.value s ~default:Formula.Set.empty in
-      let s' = Option.value s' ~default:Formula.Set.empty in
-      Some (Formula.Set.union s s')
-
+(** Module [Label] allows a bottom-to-top traversal of the formula tree [f],
+    repeatedly adding subformulae to [labels] for all [states] *)
 module Label = struct
   let add_on_condition labels f cond =
     Int_map.mapi
@@ -38,8 +32,8 @@ module Label = struct
 
   and v_or states labels f f' =
     let labels =
-      Int_map.merge merge_labels (v_state states labels f)
-        (v_state states labels f')
+      let labels' = v_state states labels f in
+      v_state states labels' f'
     in
     let cond i =
       Formula.f_in_state_labels labels i f
@@ -49,8 +43,8 @@ module Label = struct
 
   and v_and states labels f f' =
     let labels =
-      Int_map.merge merge_labels (v_state states labels f)
-        (v_state states labels f')
+      let labels' = v_state states labels f in
+      v_state states labels' f'
     in
     let cond i =
       Formula.f_in_state_labels labels i f
@@ -60,8 +54,8 @@ module Label = struct
 
   and v_impl states labels f f' =
     let labels =
-      Int_map.merge merge_labels (v_state states labels f)
-        (v_state states labels f')
+      let labels' = v_state states labels f in
+      v_state states labels' f'
     in
     let cond i =
       (not (Formula.f_in_state_labels labels i f))
@@ -77,8 +71,8 @@ module Label = struct
 
   and v_strong_until states labels ~t ~p ~op f f' =
     let labels =
-      Int_map.merge merge_labels (v_state states labels f)
-        (v_state states labels f')
+      let labels' = v_state states labels f in
+      v_state states labels' f'
     in
     Modal.strong_until states labels ~t ~p ~op f f'
 
@@ -90,7 +84,8 @@ module Label = struct
       | Zero -> One
     in
     let op = match op with Formula.Geq -> Formula.Gt | Gt -> Geq in
-    v_strong_until states labels ~t ~p ~op (Neg f') (And (Neg f, Neg f'))
+    v_state states labels
+      Formula.(Neg (P (op, p, Strong_until (t, Neg f', And (Neg f, Neg f')))))
 
   and v_generally states labels ~t ~p ~op f =
     v_weak_until states labels ~t ~p ~op f (Formula.Bool false)
@@ -104,8 +99,6 @@ module Label = struct
     in
     v_forall states labels f
 
-  (** [v_state states labels f] is a bottom-to-top traversal of the formula tree [f],
-      repeatedly adding subformulae to [labels] for all [states] *)
   and v_state states labels = function
     | Formula.Bool _ -> labels
     | Prop _ -> labels
@@ -129,6 +122,7 @@ module Label = struct
 end
 
 let v k f =
+  let f = Formula.canonicalise f in
   let states = k.Model.Kripke.states in
   let starting_labels = label_init states in
   let labels = Label.v states starting_labels f in
