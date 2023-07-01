@@ -35,8 +35,7 @@ let%test_unit "Model checking for until modal operator, short" =
   let k = Kripke.v_list 0 states in
   (* P_{p >= 0.5} ( true U_{t <= 5} Red ) *)
   let f =
-    Formula.(
-      P (Geq, Pr 0.99, Strong_until (v_time (T 5), Prop Ap.Green, Prop Ap.Red)))
+    Formula.(P (Geq, Pr 0.99, Strong_until (T 5, Prop Ap.Green, Prop Ap.Red)))
   in
   let result = Check.v k f in
   [%test_result: bool] result ~expect:true
@@ -52,15 +51,13 @@ let%test_unit "Model checking for until modal operator, long" =
   let k = Kripke.v_list 0 states in
   (* P_{p >= 0.5} ( true U_{t <= 60} Red ) *)
   let f =
-    Formula.(
-      P (Geq, Pr 0.5, Strong_until (v_time (T 60), Prop Ap.Green, Prop Ap.Red)))
+    Formula.(P (Geq, Pr 0.5, Strong_until (T 60, Prop Ap.Green, Prop Ap.Red)))
   in
   let result = Check.v k f in
   [%test_result: bool] result ~expect:false;
   (* P_{p >= 0.5} ( true U_{t <= 70} Red ) *)
   let f =
-    Formula.(
-      P (Geq, Pr 0.5, Strong_until (v_time (T 70), Prop Ap.Green, Prop Ap.Red)))
+    Formula.(P (Geq, Pr 0.5, Strong_until (T 70, Prop Ap.Green, Prop Ap.Red)))
   in
   let result = Check.v k f in
   [%test_result: bool] result ~expect:true
@@ -80,8 +77,7 @@ let%test_unit "Model checking for weak until modal operator" =
       P
         ( Geq,
           Pr 0.99,
-          Weak_until
-            (v_time (T 5), Or (Prop Ap.Green, Prop Ap.Red), Prop Ap.Amber) ))
+          Weak_until (T 5, Or (Prop Ap.Green, Prop Ap.Red), Prop Ap.Amber) ))
   in
   let k = Kripke.v_list 0 states in
   let result = Check.v k f in
@@ -105,15 +101,13 @@ let%test_unit "Model checking for strong until modal operator with p > 0" =
   in
   let k = Kripke.v_list 0 states in
   (* P_{p > 0} ( true U_{t <= 2} Amber ) *)
-  let f = Formula.(E (Strong_until (v_time (T 2), Bool true, Prop Ap.Amber))) in
+  let f = Formula.(E (Strong_until (T 2, Bool true, Prop Ap.Amber))) in
   let result = Check.v k f in
   [%test_result: bool] result ~expect:true;
   (* P_{p > 0} ( true U_{t <= 10} (Red /\ Amber) ) *)
   let f =
     Formula.(
-      E
-        (Strong_until
-           (v_time (T 10), Bool true, And (Prop Ap.Red, Prop Ap.Amber))))
+      E (Strong_until (T 10, Bool true, And (Prop Ap.Red, Prop Ap.Amber))))
   in
   let result = Check.v k f in
   [%test_result: bool] result ~expect:false
@@ -130,10 +124,10 @@ let%test_unit "Model checking for strong until modal operator with p >= 1" =
   in
   let k = Kripke.v_list 0 states in
   (* P_{p >= 1} ( true U_{t <= 2} Amber ) *)
-  let f = Formula.(A (Strong_until (v_time (T 2), Bool true, Prop Ap.Amber))) in
+  let f = Formula.(A (Strong_until (T 2, Bool true, Prop Ap.Amber))) in
   let result = Check.v k f in
   [%test_result: bool] result ~expect:false;
   (* P_{p >= 1} ( true U_{t <= 1} Green ) *)
-  let f = Formula.(A (Strong_until (v_time (T 1), Bool true, Prop Ap.Green))) in
+  let f = Formula.(A (Strong_until (T 1, Bool true, Prop Ap.Green))) in
   let result = Check.v k f in
   [%test_result: bool] result ~expect:true

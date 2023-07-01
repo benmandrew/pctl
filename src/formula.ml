@@ -1,6 +1,5 @@
 open Ppx_compare_lib.Builtin
 
-(** Comparison operators for PCTL path operators *)
 type comparison = Geq | Gt [@@deriving compare, show]
 
 type prob = One | Pr of float | Zero [@@deriving show]
@@ -19,22 +18,8 @@ let compare_prob_with_op c p p' =
   | Geq -> compare_prob (Pr p) (Pr p') >= 0
   | Gt -> compare_prob (Pr p) (Pr p') > 0
 
-let v_prob = function
-  | Pr p ->
-      assert (Float.(compare p 1.0 < 0 && compare p 0.0 > 0));
-      Pr p
-  | p -> p
-
-(** Discrete time-steps for PCTL state operators *)
 type time = T of int | Infinity [@@deriving compare, show]
 
-let v_time = function
-  | T t ->
-      assert (t >= 0);
-      T t
-  | t -> t
-
-(** PCTL state formulae *)
 type s =
   | Bool of bool
   | Prop of Model.Aprop.t
@@ -47,7 +32,6 @@ type s =
   | E of p
 [@@deriving compare, show]
 
-(** PCTL path formulae *)
 and p =
   | Strong_until of time * s * s
   | Weak_until of time * s * s
@@ -57,7 +41,6 @@ and p =
 [@@deriving compare, show]
 
 type t = s [@@deriving compare, show]
-(** Top-level PCTL formulae must be state formulae *)
 
 let canonicalise =
   let rec c_s = function

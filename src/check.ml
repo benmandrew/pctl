@@ -63,11 +63,8 @@ module Label = struct
     in
     add_on_condition labels (Formula.Impl (f, f')) cond
 
-  and v_forall states labels f =
-    Formula.(v_path states labels ~p:(Pr 1.0) ~op:Geq f)
-
-  and v_exists states labels f =
-    Formula.(v_path states labels ~p:(Pr 0.0) ~op:Gt f)
+  and v_forall states labels f = Formula.(v_path states labels ~p:One ~op:Geq f)
+  and v_exists states labels f = Formula.(v_path states labels ~p:Zero ~op:Gt f)
 
   and v_strong_until states labels ~t ~p ~op f f' =
     let labels =
@@ -106,8 +103,8 @@ module Label = struct
     | Or (f, f') -> v_or states labels f f'
     | And (f, f') -> v_and states labels f f'
     | Impl (f, f') -> v_impl states labels f f'
-    | A f -> v_path states labels ~p:One ~op:Geq f
-    | E f -> v_path states labels ~p:Zero ~op:Gt f
+    | A f -> v_forall states labels f
+    | E f -> v_exists states labels f
     | P (op, p, f) -> v_path states labels ~p ~op f
 
   and v_path states labels ~p ~op = function

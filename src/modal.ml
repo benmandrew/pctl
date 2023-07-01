@@ -36,12 +36,6 @@ let matrix_mul m v =
   in
   mapi (fun i _ -> product v m.(i)) v
 
-let print_vector r =
-  Array.iter (Printf.printf "%4.2f ") r;
-  Printf.printf "\n"
-
-let print_matrix = Array.iter print_vector
-
 let mu_measure_until (states : Model.State.t Int_map.t) labels t f f' =
   let inconclusive_states, _ =
     Int_map.partition (fun i _ -> state_inconclusive labels i f f') states
@@ -135,7 +129,7 @@ let strong_until states labels ~t ~p ~op f f' =
         Int_set.cardinal unseen
       in
       label_eu states labels ~t:n_inconclusive f f'
-  | Infinity, Pr _, Geq -> raise Exit
+  | Infinity, Pr _, Geq -> failwith "General case of infinite-length paths is not handled"
   | Formula.T t, Formula.One, Formula.Geq -> label_au states labels ~t f f'
   | T t, Pr p, _ ->
       let f_main = Formula.(P (op, Pr p, Strong_until (T t, f, f'))) in
