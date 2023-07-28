@@ -131,3 +131,56 @@ let%test_unit "Model checking for strong until modal operator with p >= 1" =
   let f = Formula.(A (Strong_until (T 1, Bool true, Prop Ap.Green))) in
   let result = Check.v k f in
   [%test_result: bool] result ~expect:true
+
+let%test_unit "Model checking for strong until modal operator with t = Inf" =
+  let open Model in
+  let states =
+    [
+      (0, State.v_list [ (0, 0.99); (1, 0.01) ] [ Ap.Green ]);
+      (1, State.v_list [ (1, 1.0) ] [ Ap.Red ]);
+    ]
+  in
+  let k = Kripke.v_list 0 states in
+  (* P_{p >= 0.5} ( Green U_{t <= Infinity} Red ) *)
+  let f =
+    Formula.(
+      P (Geq, Pr 0.5, Strong_until (Infinity, Prop Ap.Green, Prop Ap.Red)))
+  in
+  let result = Check.v k f in
+  [%test_result: bool] result ~expect:true
+
+let%test_unit "Model checking for weak until modal operator with t = Inf" =
+  let open Model in
+  let states =
+    [
+      (0, State.v_list [ (0, 0.1); (1, 0.9) ] [ Ap.Green ]);
+      (1, State.v_list [ (0, 0.9); (2, 0.1) ] [ Ap.Red ]);
+      (2, State.v_list [ (1, 0.1); (2, 0.9) ] [ Ap.Amber ]);
+    ]
+  in
+  (* P_{p >= 0.99} ( (Green \/ Red) W_{t <= 5} Amber ) *)
+  let f =
+    Formula.(
+      P
+        ( Geq,
+          Pr 0.99,
+          Weak_until (Infinity, Or (Prop Ap.Green, Prop Ap.Red), Prop Ap.Amber)
+        ))
+  in
+  let k = Kripke.v_list 0 states in
+  let result = Check.v k f in
+  [%test_result: bool] result ~expect:true;
+  let k = Kripke.v_list 1 states in
+  let result = Check.v k f in
+  [%test_result: bool] result ~expect:true;
+  let k = Kripke.v_list 2 states in
+  let result = Check.v k f in
+  [%test_result: bool] result ~expect:true
+
+(* let%test_unit "Model checking Parrow's Protocol (PP)" =
+   let open Model in
+   let states =
+     [
+       (0, State.v_list [] [Ap.Green]);
+     ]
+   in *)

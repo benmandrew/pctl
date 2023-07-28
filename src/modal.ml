@@ -6,7 +6,7 @@ let matrix n states inconclusive_states =
     else if i = j then 1.0
     else 0.0
   in
-  Array.init n (fun i -> Array.init n (fun j -> f i j))
+  Matrix.init n f
 
 let state_inconclusive labels i f f' =
   Formula.(f_in_state_labels labels i f && not (f_in_state_labels labels i f'))
@@ -49,13 +49,7 @@ let mu_measure_until (states : Model.State.t Int_map.t) labels t f f' =
   let rec f acc = function 0 -> acc | n -> f (matrix_mul m acc) (n - 1) in
   f v t
 
-let add_labels labels fringe f =
-  Int_set.fold
-    (fun i labels ->
-      let s = Formula.Set.add f (Int_map.find i labels) in
-      Int_map.add i s labels)
-    fringe labels
-
+(** {m \{ s : s \in unseen \wedge (\exists s' \in fringe : T(s,s') > 0) \} } *)
 let get_next_fringe states unseen next_states_condition =
   let add_s_conditional i acc =
     let next_states =
@@ -73,16 +67,31 @@ let get_next_fringe states unseen next_states_condition =
 
 let strong_until_f ~t ~p ~op f f' = Formula.(P (op, p, Strong_until (t, f, f')))
 
-(** [label_eu states labels ~t f f'] labels states for the case of the until operator {m f U^{\geq t}_{>0} f'} *)
-let label_eu states labels ~t f f' =
-  let f_main = strong_until_f ~t:(T t) ~p:Zero ~op:Gt f f' in
-  let rec aux labels unseen fringe = function
-    | 0 ->
-        (* {m \forall x \in fringe do addlabel(s,f_{main})} *)
-        add_labels labels fringe f_main
+(** [label_states labels states f] labels all states in [states] with [f],
+    adding to the existing [labels] *)
+let label_states labels states f =
+  let f i labels =
+    let formulae = Int_map.find i labels |> Formula.Set.add f in
+    Int_map.add i formulae labels
+  in
+  Int_set.fold f states labels
+
+(** [label_all_conditional labels ~p ~op f probabilities] labels states
+    indexed by [i] with [f] if [probabilities.(i) op p], adding to the
+    existing [labels] *)
+let label_all_conditional labels ~p ~op f probabilities =
+  Int_map.mapi
+    (fun i s ->
+      let p' = probabilities.(i) in
+      if Formula.compare_prob_with_op op p' p then Formula.Set.add f s else s)
+    labels
+
+(** [filter_eu states labels ~t f f'] returns states which would be
+    labelled for the case of the until operator {m f U^{\geq t}_{>0} f'} *)
+let filter_eu states labels ~t f f' =
+  let rec aux acc unseen fringe = function
+    | 0 -> acc
     | n ->
-        (* {m \forall x \in fringe do addlabel(s,f_{main})} *)
-        let labels = add_labels labels fringe f_main in
         (* {m unseen := unseen - fringe} *)
         let unseen = Int_set.diff unseen fringe in
         (* {m fringe := \{ s : (s \in unseen \wedge \exists s' \in fringe : (T(s,s') > 0)) \}} *)
@@ -90,22 +99,18 @@ let label_eu states labels ~t f f' =
           get_next_fringe states unseen
             (Int_set.exists (fun i -> Int_set.mem i fringe))
         in
-        aux labels unseen fringe (n - 1)
+        aux (Int_set.union acc fringe) unseen fringe (n - 1)
   in
   let fringe, _, unseen = partition_states states labels f f' in
   let mr = Int.min (Int_set.cardinal unseen) t in
-  aux labels unseen fringe mr
+  aux fringe unseen fringe mr
 
-(** [label_eu states labels ~t f f'] labels states for the case of the until operator {m f U^{\geq t}_{\geq 1} f'} *)
-let label_au states labels ~t f f' =
-  let f_main = strong_until_f ~t:(T t) ~p:One ~op:Geq f f' in
-  let rec aux labels unseen fringe seen = function
-    | 0 ->
-        (* {m \forall x \in fringe do addlabel(s,f_{main})} *)
-        add_labels labels fringe f_main
+(** [filter_au states labels ~t f f'] returns states which would be
+    labelled for the case of the until operator {m f U^{\geq t}_{\geq 1} f'} *)
+let filter_au states labels ~t f f' =
+  let rec aux acc unseen fringe seen = function
+    | 0 -> acc
     | n ->
-        (* {m \forall x \in fringe do addlabel(s,f_{main})} *)
-        let labels = add_labels labels fringe f_main in
         (* {m unseen := unseen - fringe} *)
         let unseen = Int_set.diff unseen fringe in
         (* {m seen := seen \cup fringe} *)
@@ -115,12 +120,58 @@ let label_au states labels ~t f f' =
           get_next_fringe states unseen
             (Int_set.for_all (fun i -> Int_set.mem i seen))
         in
-        aux labels unseen fringe seen (n - 1)
+        aux (Int_set.union acc fringe) unseen fringe seen (n - 1)
   in
   let fringe, _, unseen = partition_states states labels f f' in
   let seen = Int_set.empty in
   let mr = Int.min (Int_set.cardinal unseen) t in
-  aux labels unseen fringe seen mr
+  aux fringe unseen fringe seen mr
+
+(** [label_eu states labels ~t f f'] labels states for the case of the
+    until operator {m f U^{\geq t}_{>0} f'} *)
+let label_eu states labels ~t f f' =
+  let f_main = strong_until_f ~t:(T t) ~p:Zero ~op:Gt f f' in
+  let s = filter_eu states labels ~t f f' in
+  label_states labels s f_main
+
+(** [label_au states labels ~t f f'] labels states for the case of the
+    until operator {m f U^{\geq t}_{\geq 1} f'} *)
+let label_au states labels ~t f f' =
+  let f_main = strong_until_f ~t:(T t) ~p:One ~op:Geq f f' in
+  let s = filter_au states labels ~t f f' in
+  label_states labels s f_main
+
+(** [gaussian_matrix n r q states] creates the system of linear equations defining:
+
+    {math P(\infty, s) = \begin{align*}
+      \text{if } s \in R \text{ then } 1 \\
+      \text{else if } s \in Q \text{ then } 0 \\
+      \text{else } \sum_{s' \in S} T(s, s') \cdot P(\infty, s')
+    \end{align*} } *)
+let gaussian_matrix n r q states =
+  let f i j =
+    if Int_set.mem i r then 1.0
+    else if Int_set.mem i q then 0.0
+    else
+      let s = Int_map.find i states in
+      match Int_map.find_opt j s.Model.State.t with Some v -> v | None -> 0.0
+  in
+  Matrix.init n f |> Matrix.mapi (fun i j v -> if i = j then v -. 1.0 else v)
+
+let mu_measure_until_infinite states labels f f' =
+  let s_s, s_f, s_i = partition_states states labels f f' in
+  let t = Int_set.cardinal s_i in
+  let failure_states =
+    let unreachable = Int_set.diff s_i (filter_eu states labels ~t f f') in
+    Int_set.union s_f unreachable
+  in
+  let success_states =
+    let guaranteed = filter_au states labels ~t f f' in
+    Int_set.union s_s guaranteed
+  in
+  let n = Int_map.cardinal states in
+  gaussian_matrix n success_states failure_states states
+  |> Matrix.gaussian_elim n |> Matrix.back_substitute n
 
 let strong_until states labels ~t ~p ~op f f' =
   match (t, p, op) with
@@ -141,17 +192,14 @@ let strong_until states labels ~t ~p ~op f f' =
   | T t, Pr p, _ ->
       let f_main = Formula.(P (op, Pr p, Strong_until (T t, f, f'))) in
       let probabilities = mu_measure_until states labels t f f' in
-      Int_map.mapi
-        (fun i s ->
-          let p' = probabilities.(i) in
-          if Formula.compare_prob_with_op op p' p then Formula.Set.add f_main s
-          else s)
-        labels
+      label_all_conditional labels ~p ~op f_main probabilities
   | _, One, Gt -> labels
   | t, Zero, Geq ->
       let state_ids =
         Int_map.bindings states |> List.map fst |> Int_set.of_list
       in
-      add_labels labels state_ids (strong_until_f ~t ~p ~op f f')
-  | Infinity, Pr _, _ ->
-      failwith "General case of infinite-length paths is not handled"
+      label_states labels state_ids (strong_until_f ~t ~p ~op f f')
+  | Infinity, Pr p, _ ->
+      let f_main = Formula.(P (op, Pr p, Strong_until (Infinity, f, f'))) in
+      let probabilities = mu_measure_until_infinite states labels f f' in
+      label_all_conditional labels ~p ~op f_main probabilities
