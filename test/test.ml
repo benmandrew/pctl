@@ -176,11 +176,3 @@ let%test_unit "Model checking for weak until modal operator with t = Inf" =
   let k = Kripke.v_list 2 states in
   let result = Check.v k f in
   [%test_result: bool] result ~expect:true
-
-(* let%test_unit "Model checking Parrow's Protocol (PP)" =
-   let open Model in
-   let states =
-     [
-       (0, State.v_list [] [Ap.Green]);
-     ]
-   in *)
