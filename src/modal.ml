@@ -6,12 +6,10 @@ let matrix n states inconclusive_states =
     else if i = j then 1.0
     else 0.0
   in
-  Matrix.init n f
+  Linalg.Mat.init n f
 
 let state_inconclusive labels i f f' =
   Formula.(f_in_state_labels labels i f && not (f_in_state_labels labels i f'))
-
-module Int_set = Set.Make (Int)
 
 (** [partition states labels f f'] returns the set of [states] partitioned into three maps [(s_s, s_f, s_i)]. 
     - [s_s] is the set of success states, where for a given state [f'] is in the set of labels
@@ -141,22 +139,55 @@ let label_au states labels ~t f f' =
   let s = filter_au states labels ~t f f' in
   label_states labels s f_main
 
-(** [gaussian_matrix n r q states] creates the system of linear equations defining:
+(** [gaussian_matrix n r q states] creates the system of linear equations defined by:
 
     {math P(\infty, s) = \begin{align*}
       \text{if } s \in R \text{ then } 1 \\
       \text{else if } s \in Q \text{ then } 0 \\
       \text{else } \sum_{s' \in S} T(s, s') \cdot P(\infty, s')
     \end{align*} } *)
-let gaussian_matrix n r q states =
-  let f i j =
-    if Int_set.mem i r then 1.0
-    else if Int_set.mem i q then 0.0
-    else
-      let s = Int_map.find i states in
-      match Int_map.find_opt j s.Model.State.t with Some v -> v | None -> 0.0
+let infinite_fixpoint_linear_eqs r unknown_states states =
+  let n = Int_set.cardinal unknown_states in
+  let f_mat i j =
+    let s = Int_map.find i states in
+    let v = Model.State.t_prob s j in
+    if i = j then 1.0 -. v else v
   in
-  Matrix.init n f |> Matrix.mapi (fun i j v -> if i = j then v -. 1.0 else v)
+  let f_vec i =
+    Int_set.fold
+      (fun r acc ->
+        let s = Int_map.find i states in
+        acc +. Model.State.t_prob s r)
+      r 0.0
+  in
+  Linalg.(Mat.init n f_mat, Vec.init n f_vec)
+
+let get_unknown_probabilities states success_states failure_states =
+  let all_states =
+    Int_map.fold (fun i _ indices -> Int_set.add i indices) states Int_set.empty
+  in
+  let unknown_states, n_unknown =
+    let u_s =
+      Int_set.diff (Int_set.diff all_states success_states) failure_states
+    in
+    (u_s, Int_set.cardinal u_s)
+  in
+  let state_to_vec_index =
+    Int_set.fold
+      (fun i (i', indices) ->
+        if Int_set.mem i unknown_states then (i' + 1, Int_map.add i i' indices)
+        else (i', indices))
+      all_states (0, Int_map.empty)
+    |> snd
+  in
+  let m, v =
+    infinite_fixpoint_linear_eqs success_states unknown_states states
+  in
+  let m' = Linalg.gaussian_elim n_unknown m in
+  let unknown_probabilities = Linalg.back_substitute n_unknown m' v in
+  fun i ->
+    let i' = Int_map.find i state_to_vec_index in
+    unknown_probabilities.(i')
 
 let mu_measure_until_infinite states labels f f' =
   let s_s, s_f, s_i = partition_states states labels f f' in
@@ -170,8 +201,13 @@ let mu_measure_until_infinite states labels f f' =
     Int_set.union s_s guaranteed
   in
   let n = Int_map.cardinal states in
-  gaussian_matrix n success_states failure_states states
-  |> Matrix.gaussian_elim n |> Matrix.back_substitute n
+  let unknown_probabilities =
+    get_unknown_probabilities states success_states failure_states
+  in
+  Array.init n (fun i ->
+      if Int_set.mem i success_states then 1.0
+      else if Int_set.mem i failure_states then 0.0
+      else unknown_probabilities i)
 
 let strong_until states labels ~t ~p ~op f f' =
   match (t, p, op) with
@@ -182,7 +218,7 @@ let strong_until states labels ~t ~p ~op f f' =
         Int_set.cardinal unseen
       in
       label_eu states labels ~t:n_inconclusive f f'
-  | Formula.T t, Formula.One, Formula.Geq -> label_au states labels ~t f f'
+  | T t, One, Geq -> label_au states labels ~t f f'
   | Infinity, One, Geq ->
       let n_inconclusive =
         let _, _, unseen = partition_states states labels f f' in
