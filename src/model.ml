@@ -22,6 +22,7 @@ module Make (Aprop : APROP) = struct
         [l] is the set of labels that hold in the state. *)
 
     let prop_holds t ap = Aprop.Set.mem ap t.l
+    let t_prob t j = Int_map.find_opt j t.t |> Option.value ~default:0.0
 
     let v_list t l =
       let t = Int_map.of_seq @@ List.to_seq t in
@@ -44,6 +45,14 @@ module Make (Aprop : APROP) = struct
       match Int_map.find_opt s k.states with
       | Some s -> State.prop_holds s ap
       | None -> false
+
+    let t_prob t i j = State.t_prob (Int_map.find i t.states) j
+    let states t = t.states
+
+    let indices t =
+      Int_map.fold
+        (fun i _ indices -> Int_set.add i indices)
+        t.states Int_set.empty
   end
 end
 
