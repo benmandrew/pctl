@@ -21,7 +21,7 @@ type time = T of int | Infinity [@@deriving compare, show]
 
 type s =
   | Bool of bool
-  | Prop of Model.Aprop.t
+  | Prop of string
   | Neg of s
   | Or of s * s
   | And of s * s

@@ -1,18 +1,9 @@
-module Aprop : sig
-  type t = Ap.m
-
-  val pp : Format.formatter -> t -> unit
-  val compare : t -> t -> int
-
-  module Set : Set.S with type elt := t with type t := Ap.Set.t
-end
-
 module State : sig
-  type t = { t : float Int_map.t; l : Ap.Set.t }
+  type t = { t : float Int_map.t; l : Str_set.t }
 
-  val prop_holds : t -> Ap.m -> bool
+  val prop_holds : t -> string -> bool
   val t_prob : t -> int -> float
-  val v_list : (int * float) list -> Ap.m list -> t
+  val v_list : (int * float) list -> string list -> t
 end
 
 module Kripke : sig
@@ -20,7 +11,7 @@ module Kripke : sig
 
   val v : int -> State.t Int_map.t -> t
   val v_list : int -> (int * State.t) list -> t
-  val prop_holds_in_state : t -> int -> Ap.m -> bool
+  val prop_holds_in_state : t -> int -> string -> bool
   val t_prob : t -> int -> int -> float
   val states : t -> State.t Int_map.t
   val indices : t -> Int_set.t

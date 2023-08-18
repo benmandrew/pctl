@@ -13,7 +13,7 @@ type time = T of int | Infinity
 (** PCTL state formulae *)
 type s =
   | Bool of bool
-  | Prop of Ap.m
+  | Prop of string
   | Neg of s
   | Or of s * s
   | And of s * s
