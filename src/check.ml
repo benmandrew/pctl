@@ -1,6 +1,6 @@
 let label_init states =
   let init_props s =
-    Model.Aprop.Set.fold
+    Str_set.fold
       (fun p f -> Formula.Set.add (Formula.Prop p) f)
       s.Model.State.l
       (Formula.Set.singleton (Formula.Bool true))
